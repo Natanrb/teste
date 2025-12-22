@@ -30,25 +30,74 @@ export default function DashboardClinica() {
 
   const [plano, setPlano] = useState(null);
   const [gerando, setGerando] = useState(false);
+  const [analise, setAnalise] = useState(null);
+  const [analisando, setAnalisando] = useState(false);
 
-  const gerarPlanoIA = async () => {
-    try {
-      setGerando(true);
+const gerarAnalise = async () => {
+  try {
+    setAnalisando(true);
 
-      const res = await fetch("/api/gerarPlano", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dados),
-      });
+    const res = await fetch("/api/gerar-planos/analise", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados),
+    });
 
-      const data = await res.json();
-      setPlano(data);
-      setGerando(false);
-    } catch (error) {
-      console.error("Erro ao gerar plano:", error);
-      setGerando(false);
-    }
-  };
+    if (!res.ok) throw new Error("Erro na análise");
+
+    const data = await res.json();
+    setAnalise(data);
+  } catch (err) {
+    console.error("Erro ao gerar análise:", err);
+    alert("Erro ao gerar análise");
+  } finally {
+    setAnalisando(false);
+  }
+};
+
+
+const gerarPlanoIA = async () => {
+  try {
+    setGerando(true);
+
+    // 1️⃣ Plano alimentar
+    const resAlimentar = await fetch("/api/gerar-planos/plano-alimentar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados),
+    });
+
+    if (!resAlimentar.ok) throw new Error("Erro no plano alimentar");
+
+    const planoAlimentar = await resAlimentar.json();
+
+    // 2️⃣ Plano de treino
+    const resTreino = await fetch("/api/gerar-planos/plano-treino", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados),
+    });
+
+    if (!resTreino.ok) throw new Error("Erro no plano de treino");
+
+    const planoTreino = await resTreino.json();
+
+    // 3️⃣ Unifica no frontend (SEM mudar PDF)
+    setPlano({
+      ...planoAlimentar,
+      treino: planoTreino,
+    });
+
+  } catch (error) {
+    console.error("Erro ao gerar planos:", error);
+    alert("Erro ao gerar o plano. Tente novamente.");
+  } finally {
+    setGerando(false);
+  }
+};
+
+
+
 
   const gerarPDF = () => {
   if (!plano || !plano.semana) {
@@ -221,12 +270,49 @@ export default function DashboardClinica() {
         </select>
       </div>
 
+{analise?.metabolismo && (
+  <div className="border rounded p-4 mt-4 text-sm space-y-2">
+    <h2 className="font-semibold text-lg">Análise do Perfil</h2>
+
+    <p>
+      <strong>Taxa Metabólica Basal:</strong>{" "}
+      {analise.metabolismo.bmr} kcal
+    </p>
+
+
+    <p>
+      <strong>Gasto Diário Estimado:</strong>{" "}
+      {analise.metabolismo.gastoDiarioEstimado} kcal
+    </p>
+
+    <p>
+      <strong>Gordura Corporal (estimativa):</strong>{" "}
+      {analise.composicaoCorporal.gorduraCorporalEstimativa}
+    </p>
+
+    <p className="text-gray-500">
+      {analise.composicaoCorporal.observacao}
+    </p>
+
+    <p>
+      <strong>Recomendação de treino:</strong>{" "}
+      {analise.analiseGeral.recomendacao}
+    </p>
+
+    <p className="text-green-600 font-medium">
+      {analise.proximoPasso}
+    </p>
+  </div>
+)}
+<Button onClick={gerarAnalise} disabled={!formularioValido || analisando}>
+  {analisando ? "Analisando..." : "Analisar Perfil"}
+</Button>
       <div className="flex flex-col items-center gap-4">
         <p className="text-sm text-gray-500 text-center">
           O plano será gerado automaticamente com base nas informações fornecidas.
         </p>
 
-        <Button onClick={gerarPlanoIA} disabled={!formularioValido || gerando}>
+        <Button onClick={gerarPlanoIA} disabled={!analise || !formularioValido || gerando}>
           {gerando ? "Gerando plano..." : "Gerar Plano Semanal"}
         </Button>
 
